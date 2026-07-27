@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.16.0
+      - run: zig build
+        working-directory: .native/build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qrcode-windows
+          path: .native/build/zig-out/bin/

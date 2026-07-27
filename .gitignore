@@ -1,0 +1,13 @@
+.native/
+zig-out/
+.zig-cache/
+zig-cache/
+zig-pkg/
+*.exe
+*.pdb
+*.obj
+*.lib
+*.exp
+*.ilk
+*.bmp
+_sdk/node_modules/
