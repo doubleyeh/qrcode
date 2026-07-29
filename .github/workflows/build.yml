@@ -11,9 +11,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
+      - uses: mlugg/setup-zig@v1
         with:
           version: 0.16.0
+      - run: npm install @native-sdk/cli
+      - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
       - run: zig build
         working-directory: .native/build
       - uses: actions/upload-artifact@v4
