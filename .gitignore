@@ -11,3 +11,4 @@ zig-pkg/
 *.ilk
 *.bmp
 _sdk/node_modules/
+_sdk/
