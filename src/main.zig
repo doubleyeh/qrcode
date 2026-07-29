@@ -368,6 +368,8 @@ pub fn main(init: std.process.Init) void {
         .init_fx = initFx,
         .status_item = .{
             .title = "\xe4\xba\x8c\xe7\xbb\xb4\xe7\xa0\x81\xe5\xb7\xa5\xe5\x85\xb7",
+            .icon_path = "icon.ico",
+            .tooltip = "\xe4\xba\x8c\xe7\xbb\xb4\xe7\xa0\x81\xe7\x94\x9f\xe6\x88\x90\xe5\x99\xa8",
             .items = &.{
                 native_sdk.platform.TrayMenuItem{ .id = 1, .label = "\xe6\x8d\x95\xe8\x8e\xb7\xe5\xb9\xb6\xe7\x94\x9f\xe6\x88\x90\xe4\xba\x8c\xe7\xbb\xb4\xe7\xa0\x81", .command = "capture_qr" },
                 native_sdk.platform.TrayMenuItem{ .id = 2, .separator = true },
