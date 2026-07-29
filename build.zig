@@ -6,4 +6,6 @@ pub fn build(b: *std.Build) void {
     artifacts.exe.subsystem = .windows;
     artifacts.exe.root_module.addCSourceFile(.{ .file = b.path("src/hideconsole.c"), .flags = &.{} });
     b.installFile("assets/icon.ico", "bin/icon.ico");
+    const loader = b.addInstallBinFile(b.path("_sdk/third_party/webview2/x64/WebView2Loader.dll"), "WebView2Loader.dll");
+    b.getInstallStep().dependOn(&loader.step);
 }
