@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -19,8 +20,15 @@ jobs:
           echo "$zigDir" >> $env:GITHUB_PATH
       - run: npm install @native-sdk/cli
       - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
+      - run: Copy-Item assets/Geist-Regular.ttf _sdk/src/primitives/canvas/fonts/Geist-Regular.ttf -Force
+      - run: (Get-Content _sdk/src/primitives/canvas/font_ttf.zig) -replace 'max_glyph_points = 128', 'max_glyph_points = 192' | Set-Content _sdk/src/primitives/canvas/font_ttf.zig
       - run: zig build -Dcpu=baseline
       - uses: actions/upload-artifact@v4
         with:
           name: qrcode-windows
           path: zig-out/bin/
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zig-out/bin/*
