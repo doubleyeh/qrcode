@@ -20,8 +20,7 @@ jobs:
       - run: npm install @native-sdk/cli
       - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
       - run: zig build
-        working-directory: .native/build
       - uses: actions/upload-artifact@v4
         with:
           name: qrcode-windows
-          path: .native/build/zig-out/bin/
+          path: zig-out/bin/
