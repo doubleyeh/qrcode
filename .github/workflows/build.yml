@@ -19,7 +19,13 @@ jobs:
           echo "$zigDir" >> $env:GITHUB_PATH
       - run: npm install @native-sdk/cli
       - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
+      - run: Get-ChildItem _sdk -Depth 3 | Select-Object Mode, Name | Format-Table -AutoSize
       - run: zig build
+      - run: Get-ChildItem zig-out/bin -Recurse | Select-Object Name, Length | Format-Table -AutoSize
+      - run: |
+          $proc = Start-Process zig-out/bin/qrcode.exe -PassThru
+          Start-Sleep -Milliseconds 500
+          if (!$proc.HasExited) { "Process running OK"; $proc.Kill() } else { "Process exited code: $($proc.ExitCode)"; exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: qrcode-windows
