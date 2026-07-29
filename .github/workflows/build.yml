@@ -11,9 +11,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.16.0
+      - shell: pwsh
+        run: |
+          curl -L -o zig.zip https://ziglang.org/download/0.16.0/zig-windows-x86_64-0.16.0.zip
+          Expand-Archive zig.zip -DestinationPath zig-temp
+          $zigDir = (Get-ChildItem zig-temp -Directory).FullName
+          echo "$zigDir" >> $env:GITHUB_PATH
       - run: npm install @native-sdk/cli
       - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
       - run: zig build
