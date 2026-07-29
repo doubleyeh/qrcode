@@ -4973,7 +4973,7 @@ static bool createNativeWindow(Host *host, Window &window) {
          * `window` referencing the stored map entry for exactly this. */
         SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
-    ShowWindow(hwnd, SW_SHOW);
+    // ShowWindow(hwnd, SW_SHOW);  // managed by on_first_present
     UpdateWindow(hwnd);
     SetTimer(hwnd, kFrameTimerId, 16, nullptr);
     return true;

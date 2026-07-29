@@ -4,6 +4,7 @@ const native_sdk = @import("native_sdk");
 const qr_lib = @import("qr.zig");
 
 const SW_HIDE: c_int = 0;
+const SW_SHOW: c_int = 5;
 const SW_RESTORE: c_int = 9;
 const KEYEVENTF_KEYUP: u32 = 0x0002;
 const VK_CONTROL: u32 = 0x11;
@@ -26,6 +27,7 @@ extern "user32" fn CallWindowProcW(prevWndFunc: ?*anyopaque, hWnd: ?*anyopaque, 
 extern "user32" fn GetSystemMetrics(nIndex: c_int) c_int;
 extern "user32" fn SetWindowPos(hWnd: ?*anyopaque, hWndInsertAfter: ?*anyopaque, X: c_int, Y: c_int, cx: c_int, cy: c_int, uFlags: u32) c_int;
 extern "kernel32" fn FreeConsole() void;
+extern "kernel32" fn GetConsoleWindow() ?*anyopaque;
 extern "user32" fn LoadImageA(hInst: ?*anyopaque, name: [*:0]const u8, typ: u32, cx: c_int, cy: c_int, fuLoad: u32) ?*anyopaque;
 extern "user32" fn SendMessageW(hWnd: ?*anyopaque, msg: u32, wParam: u64, lParam: isize) isize;
 
@@ -84,6 +86,7 @@ pub const Msg = union(enum) {
     nav_next,
     hotkey_tick: native_sdk.EffectTimer,
     read_clipboard: native_sdk.EffectTimer,
+    show_main_window: native_sdk.EffectTimer,
 };
 
 const Effects = native_sdk.Effects(Msg);
@@ -230,6 +233,12 @@ pub fn update(model: *Model, msg: Msg, fx: *Effects) void {
                 showQrPage(model, fx);
             }
         },
+        .show_main_window => |timer| {
+            if (timer.outcome != .fired) return;
+            const hwnd = FindWindowA(null, "QR Code Generator") orelse return;
+            _ = ShowWindow(hwnd, SW_SHOW);
+            _ = SetForegroundWindow(hwnd);
+        },
     }
 }
 
@@ -315,6 +324,9 @@ fn setWindowIcon() void {
 }
 
 fn initFx(model: *Model, fx: *Effects) void {
+    if (FindWindowA(null, "QR Code Generator")) |hwnd| {
+        _ = ShowWindow(hwnd, SW_HIDE);
+    }
     centerMainWindow();
     setWindowIcon();
     registerGlobalHotkey(model);
@@ -323,6 +335,12 @@ fn initFx(model: *Model, fx: *Effects) void {
         .interval_ms = 200,
         .mode = .repeating,
         .on_fire = Effects.timerMsg(.hotkey_tick),
+    });
+    fx.startTimer(.{
+        .key = @as(u64, 10),
+        .interval_ms = 100,
+        .mode = .one_shot,
+        .on_fire = Effects.timerMsg(.show_main_window),
     });
 }
 
@@ -335,8 +353,11 @@ fn onCommand(name: []const u8) ?Msg {
 }
 
 pub fn main(init: std.process.Init) void {
+    const has_console = GetConsoleWindow();
     FreeConsole();
-    _ = ShowWindow(FindWindowA("ConsoleWindowClass", null) orelse return, SW_HIDE);
+    if (has_console != null) {
+        _ = ShowWindow(has_console, SW_HIDE);
+    }
     const app_state = QrApp.create(std.heap.page_allocator, .{
         .name = "qrcode",
         .scene = shell_scene,
