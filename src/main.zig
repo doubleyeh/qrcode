@@ -37,6 +37,22 @@ const ICON_BIG: u64 = 1;
 const LR_LOADFROMFILE: u32 = 0x0010;
 const IMAGE_ICON: u32 = 1;
 
+const HKEY_CURRENT_USER: ?*anyopaque = @ptrFromInt(@as(usize, 0x80000001));
+const KEY_READ: u32 = 0x20019;
+const KEY_SET_VALUE: u32 = 0x0002;
+const REG_SZ: u32 = 1;
+const REG_OPTION_NON_VOLATILE: u32 = 0;
+const ERROR_SUCCESS: i32 = 0;
+const ERROR_FILE_NOT_FOUND: i32 = 2;
+
+extern "advapi32" fn RegOpenKeyExW(hKey: ?*anyopaque, lpSubKey: [*:0]const u16, ulOptions: u32, samDesired: u32, phkResult: *?*anyopaque) callconv(.winapi) i32;
+extern "advapi32" fn RegCreateKeyExW(hKey: ?*anyopaque, lpSubKey: [*:0]const u16, Reserved: u32, lpClass: ?*anyopaque, dwOptions: u32, samDesired: u32, lpSecurityAttributes: ?*anyopaque, phkResult: *?*anyopaque, lpdwDisposition: ?*u32) callconv(.winapi) i32;
+extern "advapi32" fn RegSetValueExW(hKey: ?*anyopaque, lpValueName: [*:0]const u16, Reserved: u32, dwType: u32, lpData: [*]const u16, cbData: u32) callconv(.winapi) i32;
+extern "advapi32" fn RegDeleteValueW(hKey: ?*anyopaque, lpValueName: [*:0]const u16) callconv(.winapi) i32;
+extern "advapi32" fn RegQueryValueExW(hKey: ?*anyopaque, lpValueName: [*:0]const u16, lpReserved: ?*u32, lpType: ?*u32, lpData: ?*u16, lpcbData: ?*u32) callconv(.winapi) i32;
+extern "advapi32" fn RegCloseKey(hKey: ?*anyopaque) callconv(.winapi) i32;
+extern "kernel32" fn GetModuleFileNameW(hModule: ?*anyopaque, lpFilename: [*]u16, nSize: u32) u32;
+
 var g_orig_wndproc: usize = 0;
 var g_hotkey_fired: bool = false;
 
@@ -82,6 +98,7 @@ pub const Msg = union(enum) {
     show_window,
     hide_window,
     quit,
+    toggle_autostart,
     nav_prev,
     nav_next,
     hotkey_tick: native_sdk.EffectTimer,
@@ -106,6 +123,7 @@ pub const Model = struct {
     qr_img_size: u32 = 0,
     capturing: bool = false,
     current_qr_image_id: canvas.ImageId = 0,
+    autostart_enabled: bool = false,
 };
 
 pub fn update(model: *Model, msg: Msg, fx: *Effects) void {
@@ -193,6 +211,35 @@ pub fn update(model: *Model, msg: Msg, fx: *Effects) void {
         },
         .quit => {
             fx.closeWindow("main");
+        },
+        .toggle_autostart => {
+            const autostart = !model.autostart_enabled;
+            const run_key = comptime std.unicode.utf8ToUtf16LeStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+            const value_name = comptime std.unicode.utf8ToUtf16LeStringLiteral("qrcode");
+            if (autostart) {
+                var exe_buf: [260]u16 = undefined;
+                const len = GetModuleFileNameW(null, &exe_buf, 260);
+                exe_buf[len] = 0;
+                var hKey: ?*anyopaque = null;
+                if (RegCreateKeyExW(HKEY_CURRENT_USER, run_key, 0, null, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, null, &hKey, null) == ERROR_SUCCESS) {
+                    _ = RegSetValueExW(hKey, value_name, 0, REG_SZ, @as([*]const u16, exe_buf[0..len :0].ptr), @as(u32, @intCast((len + 1) * 2)));
+                    _ = RegCloseKey(hKey);
+                    model.autostart_enabled = true;
+                    model.status = "\xe5\xb7\xb2\xe8\xae\xbe\xe7\xbd\xae\xe5\xbc\x80\xe6\x9c\xba\xe8\x87\xaa\xe5\x90\xaf\xe5\x8a\xa8";
+                } else {
+                    model.status = "\xe8\xae\xbe\xe7\xbd\xae\xe5\xa4\xb1\xe8\xb4\xa5";
+                }
+            } else {
+                var hKey: ?*anyopaque = null;
+                if (RegOpenKeyExW(HKEY_CURRENT_USER, run_key, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+                    _ = RegDeleteValueW(hKey, value_name);
+                    _ = RegCloseKey(hKey);
+                    model.autostart_enabled = false;
+                    model.status = "\xe5\xb7\xb2\xe5\x8f\x96\xe6\xb6\x88\xe5\xbc\x80\xe6\x9c\xba\xe8\x87\xaa\xe5\x90\xaf\xe5\x8a\xa8";
+                } else {
+                    model.status = "\xe5\x8f\x96\xe6\xb6\x88\xe5\xa4\xb1\xe8\xb4\xa5";
+                }
+            }
         },
         .hotkey_tick => |timer| {
             if (timer.outcome != .fired) return;
@@ -323,10 +370,21 @@ fn setWindowIcon() void {
     _ = SendMessageW(hwnd, WM_SETICON, ICON_BIG, @as(isize, @bitCast(@intFromPtr(lg_icon))));
 }
 
+fn checkAutostart() bool {
+    const run_key = comptime std.unicode.utf8ToUtf16LeStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    const value_name = comptime std.unicode.utf8ToUtf16LeStringLiteral("qrcode");
+    var hKey: ?*anyopaque = null;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, run_key, 0, KEY_READ, &hKey) != ERROR_SUCCESS) return false;
+    defer _ = RegCloseKey(hKey);
+    var data_size: u32 = 0;
+    return RegQueryValueExW(hKey, value_name, null, null, null, &data_size) == ERROR_SUCCESS;
+}
+
 fn initFx(model: *Model, fx: *Effects) void {
     if (FindWindowA(null, "QR Code Generator")) |hwnd| {
         _ = ShowWindow(hwnd, SW_HIDE);
     }
+    model.autostart_enabled = checkAutostart();
     centerMainWindow();
     setWindowIcon();
     registerGlobalHotkey(model);
@@ -349,6 +407,7 @@ fn onCommand(name: []const u8) ?Msg {
     if (std.mem.eql(u8, name, "show_window")) return .show_window;
     if (std.mem.eql(u8, name, "hide_window")) return .hide_window;
     if (std.mem.eql(u8, name, "quit")) return .quit;
+    if (std.mem.eql(u8, name, "toggle_autostart")) return .toggle_autostart;
     return null;
 }
 
@@ -376,7 +435,9 @@ pub fn main(init: std.process.Init) void {
                 native_sdk.platform.TrayMenuItem{ .id = 3, .label = "\xe6\x98\xbe\xe7\xa4\xba\xe7\xaa\x97\xe5\x8f\xa3", .command = "show_window" },
                 native_sdk.platform.TrayMenuItem{ .id = 4, .label = "\xe9\x9a\x90\xe8\x97\x8f\xe7\xaa\x97\xe5\x8f\xa3", .command = "hide_window" },
                 native_sdk.platform.TrayMenuItem{ .id = 5, .separator = true },
-                native_sdk.platform.TrayMenuItem{ .id = 6, .label = "\xe9\x80\x80\xe5\x87\xba", .command = "quit" },
+                native_sdk.platform.TrayMenuItem{ .id = 6, .label = "\xe5\xbc\x80\xe6\x9c\xba\xe8\x87\xaa\xe5\x90\xaf\xe5\x8a\xa8", .command = "toggle_autostart" },
+                native_sdk.platform.TrayMenuItem{ .id = 7, .separator = true },
+                native_sdk.platform.TrayMenuItem{ .id = 8, .label = "\xe9\x80\x80\xe5\x87\xba", .command = "quit" },
             },
         },
     }) catch return;
