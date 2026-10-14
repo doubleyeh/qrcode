@@ -1,12 +1,12 @@
-name: Build
+name: build
 
 on:
   push:
-    branches: [main]
+    branches: [wpf]
     tags: ['v*']
   pull_request:
-    branches: [main]
-    
+  workflow_dispatch:
+
 permissions:
   contents: write
 
@@ -15,27 +15,25 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
-        run: |
-          curl -L -o zig.zip https://ziglang.org/download/0.16.0/zig-x86_64-windows-0.16.0.zip
-          Expand-Archive zig.zip -DestinationPath zig-temp
-          $zigDir = (Get-ChildItem zig-temp -Directory).FullName
-          echo "$zigDir" >> $env:GITHUB_PATH
-      - run: npm install @native-sdk/cli
-      - run: New-Item -ItemType Junction -Path _sdk -Target (Get-Item node_modules/@native-sdk/cli).FullName -Force
-      - run: Copy-Item assets/Geist-Regular.ttf _sdk/src/primitives/canvas/fonts/Geist-Regular.ttf -Force
-      - run: (Get-Content _sdk/src/primitives/canvas/font_ttf.zig) -replace 'max_glyph_points = 128', 'max_glyph_points = 192' | Set-Content _sdk/src/primitives/canvas/font_ttf.zig
-      - run: zig build -Dcpu=baseline
 
-      - name: Package to ZIP
-        run: Compress-Archive -Path zig-out/bin/* -DestinationPath qrcode-windows.zip
-      
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build qrcode.csproj -c Release -o out
+
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path out/qrcode.exe,out/qrcode.exe.config,out/QRCoder.dll -DestinationPath qrcode.zip
+
       - uses: actions/upload-artifact@v4
         with:
-          name: qrcode-windows
-          path: qrcode-windows.zip
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
+          name: qrcode
+          path: qrcode.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: qrcode-windows.zip
+          files: qrcode.zip
